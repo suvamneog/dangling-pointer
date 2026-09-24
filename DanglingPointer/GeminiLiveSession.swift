@@ -17,11 +17,11 @@ final class GeminiLiveSession: GeminiLiveClientDelegate {
     private static let maxTokensToResume = 6_000
 
     private static let shortSystemInstruction = """
-    you're dangling pointer, a macOS menu-bar buddy. speak 1-2 short sentences, casual lowercase, no lists or markdown. never guess news, weather, or live facts — use tools. call look_at_screen only when the question needs the screen, then point_at or click_at if that helps. don't name tools or narrate calling them.
+    you're dangling pointer — a concise macOS menu-bar buddy. speak 1-2 short sentences, casual lowercase, no lists or markdown. for multi-step asks: chain tools until the job is done, then speak once. never guess news, weather, or live facts — use tools. call look_at_screen only when needed, then point_at/click_at if that helps. use remember for lasting prefs/projects/names the user wants kept; forget when they say forget. don't name tools or narrate calling them.
     """
 
     private static let actionsAddendum = """
-    you can open_app, open_url, press_shortcut, and type_text when the user clearly asks. don't delete, send, buy, or submit unless they asked for exactly that.
+    you can open_app, open_url, press_shortcut, and type_text when asked. for multi-step UI work: open → look_at_screen → point/click/type as needed until done. don't delete, send, buy, or submit unless they asked for exactly that.
     """
 
     private let client: GeminiLiveClient
@@ -130,10 +130,17 @@ final class GeminiLiveSession: GeminiLiveClientDelegate {
     }
 
     private func sessionConfiguration() -> GeminiLiveSessionConfiguration {
+        // Rebuild each connect so memory stays fresh without stuffing every turn.
+        let memorySnippet = DanglingPointerMemoryStore.shared.promptSnippet()
+        var systemInstruction = includeActions
+            ? Self.shortSystemInstruction + "\n" + Self.actionsAddendum
+            : Self.shortSystemInstruction
+        if !memorySnippet.isEmpty {
+            systemInstruction += "\n" + memorySnippet
+        }
+
         var configuration = GeminiLiveSessionConfiguration(
-            systemInstruction: includeActions
-                ? Self.shortSystemInstruction + "\n" + Self.actionsAddendum
-                : Self.shortSystemInstruction,
+            systemInstruction: systemInstruction,
             functionDeclarations: tools.functionDeclarations(includeActions: includeActions)
         )
         // Tight window: the model re-reads context every turn.

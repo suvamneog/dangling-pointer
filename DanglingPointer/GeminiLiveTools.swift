@@ -35,7 +35,8 @@ final class GeminiLiveTools {
     /// their results are returned with `scheduling: SILENT` so the model
     /// doesn't spend output tokens acknowledging them.
     private static let nonBlockingToolNames: Set<String> = [
-        "point_at", "click_at", "open_app", "open_url", "press_shortcut", "type_text"
+        "point_at", "click_at", "open_app", "open_url", "press_shortcut", "type_text",
+        "remember", "forget"
     ]
 
     private let danglingPointerTools: DanglingPointerTools
@@ -75,6 +76,23 @@ final class GeminiLiveTools {
                 "label": ("string", "1-3 word name of the element")
             ],
             required: ["x", "y", "label"]
+        ))
+        declarations.append(Self.declaration(
+            name: "remember",
+            description: "Save a short lasting fact (pref, project, name). Max ~120 chars. Use only when the user wants it kept.",
+            parameters: [
+                "fact": ("string", "short fact to keep"),
+                "tags": ("string", "optional comma tags, e.g. pref,project")
+            ],
+            required: ["fact"]
+        ))
+        declarations.append(Self.declaration(
+            name: "forget",
+            description: "Delete remembered facts matching a word or tag.",
+            parameters: [
+                "query": ("string", "word or tag to match")
+            ],
+            required: ["query"]
         ))
 
         guard includeActions else { return declarations }
@@ -250,6 +268,22 @@ final class GeminiLiveTools {
                 DanglingPointerActions.typeText(text)
                 resultText = "typed"
             }
+
+        case "remember":
+            let fact = stringArgument("fact")
+            let tagsFromString = stringArgument("tags")
+                .split(separator: ",")
+                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .filter { !$0.isEmpty }
+            let tagsFromArray = (arguments["tags"] as? [Any])?
+                .compactMap { $0 as? String }
+                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .filter { !$0.isEmpty } ?? []
+            let tags = tagsFromString.isEmpty ? tagsFromArray : tagsFromString
+            resultText = DanglingPointerMemoryStore.shared.remember(fact: fact, tags: tags)
+
+        case "forget":
+            resultText = DanglingPointerMemoryStore.shared.forget(matching: stringArgument("query"))
 
         default:
             // Web search, weather, news, read_webpage, battery.

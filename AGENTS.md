@@ -9,7 +9,7 @@
 
 ## Overview
 
-macOS menu bar companion app. Lives entirely in the macOS status bar (no dock icon, no main window). Clicking the menu bar icon opens a custom floating panel with companion voice controls. Uses push-to-talk (ctrl+option) to stream microphone audio into Gemini Live (`gemini-3.8-live`). The model replies with spoken audio over the same websocket and can call local tools (web, news, weather, look at screen, point, click). A Patrick Star buddy overlay can fly to and point at UI elements the model names.
+macOS menu bar companion app. Lives entirely in the macOS status bar (no dock icon, no main window). Clicking the menu bar icon opens a custom floating panel with companion voice controls. Uses push-to-talk (ctrl+option) to stream microphone audio into Gemini Live (`gemini-3.8-live`). The model replies with spoken audio over the same websocket and can call local tools (web, news, weather, look at screen, point, click, remember/forget). A Patrick Star buddy overlay can fly to and point at UI elements the model names. Flat local memory lives at `~/.dangling-pointer/memory.json` and a short snippet is injected into the Live system prompt on connect.
 
 The Gemini API key is read at runtime from `~/.dangling-pointer/gemini_api_key` — nothing sensitive ships in the app bundle or repo.
 
@@ -46,7 +46,7 @@ Worker vars: `ELEVENLABS_VOICE_ID`
 
 **Global Push-To-Talk Shortcut**: Background push-to-talk uses a listen-only `CGEvent` tap instead of an AppKit global monitor so modifier-based shortcuts like `ctrl + option` are detected more reliably while the app is running in the background.
 
-**Gemini Live token budget**: Audio is billed at ~25 tokens/s, so only the held-key window is streamed. Context compression kicks in at 8k tokens and slides back to 2.5k. Screenshots are 960px JPEGs at quality 0.5 and `MEDIA_RESOLUTION_MEDIUM`. The socket idles out after 90s so a fat context isn't re-read on the next turn. The system prompt is ~80 words.
+**Gemini Live token budget**: Audio is billed at ~25 tokens/s, so only the held-key window is streamed. Context compression kicks in at 8k tokens and slides back to 2.5k. Screenshots are 960px JPEGs at quality 0.5 and `MEDIA_RESOLUTION_MEDIUM`. The socket idles out after 90s so a fat context isn't re-read on the next turn. The system prompt stays short; memory injects at most ~600 characters on connect.
 
 **Shared URLSession for websockets**: A single long-lived `URLSession` is shared across Gemini Live (and leftover AssemblyAI) connections. Creating and invalidating a URLSession per connection corrupts the OS connection pool.
 
@@ -60,7 +60,8 @@ Worker vars: `ELEVENLABS_VOICE_ID`
 | `CompanionManager.swift` | ~1033 | Central state machine. Owns the Gemini Live session, shortcut monitoring, overlay, and permissions. Tracks voice state and cursor visibility. Push-to-talk is forwarded to `GeminiLiveSession`. |
 | `GeminiLiveSession.swift` | ~268 | Push-to-talk coordinator: connects the Live socket, streams mic audio only while the key is held, plays the reply, runs tools, and drops the socket after 90s idle. |
 | `GeminiLiveClient.swift` | ~396 | Raw WebSocket client for Gemini Live (`BidiGenerateContent`). Manual activity start/end, audio, images, and function responses. |
-| `GeminiLiveTools.swift` | ~293 | Gemini function declarations + dispatch. Wraps keyless `DanglingPointerTools` and `DanglingPointerActions`; adds `look_at_screen`, `point_at`, `click_at`. |
+| `GeminiLiveTools.swift` | ~293 | Gemini function declarations + dispatch. Wraps keyless `DanglingPointerTools` and `DanglingPointerActions`; adds `look_at_screen`, `point_at`, `click_at`, `remember`, `forget`. |
+| `DanglingPointerMemoryStore.swift` | ~140 | Flat local memory (`~/.dangling-pointer/memory.json`). Caps items and prompt snippet size for token budget. |
 | `GeminiLiveMicrophoneStreamer.swift` | ~68 | PTT mic capture → 16 kHz PCM16 chunks + loudness. |
 | `DynamicIslandView.swift` | ~150 | Top-of-screen Dynamic Island pill. Expands to show live PTT transcript (already streamed — no extra tokens), collapses when idle. |
 | `MenuBarPanelManager.swift` | ~243 | NSStatusItem + custom NSPanel lifecycle. Creates the menu bar icon, manages the floating companion panel (show/hide/position), installs click-outside-to-dismiss monitor. |
